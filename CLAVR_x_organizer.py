@@ -57,7 +57,7 @@ def save_to_netcdf(latitude, longitude, cloud_mask, datetime_obj, output_file):
     print(f"Data saved to {output_file}")
 
 
-def save_GFS_to_nc(latitude, longitude, isobaric, relative_humidity, vertical_velocity, temperature, absolute_vorticity, cloud_mixing_ratio, total_cloud_cover, datetime_obj, output_file):
+def save_GFS_to_nc(latitude, longitude, isobaric, relative_humidity, vertical_velocity, temperature, absolute_vorticity, cloud_mixing_ratio, datetime_obj, output_file):
     """
     Save latitude, longitude, GFS_data, and datetime data into a NetCDF file.
 
@@ -87,12 +87,11 @@ def save_GFS_to_nc(latitude, longitude, isobaric, relative_humidity, vertical_ve
         lat_var = ncfile.createVariable('latitude', 'f4', ('latitude',))
         lon_var = ncfile.createVariable('longitude', 'f4', ('longitude',))
         isobaric_var = ncfile.createVariable('isobaric', 'f4', ('isobaric'))
-        relative_humidity_var = ncfile.createVariable('relative_humidity', 'f4', ('time', 'isobaric','latitude', 'longitude'))
-        vertical_velocity_var = ncfile.createVariable('vertical_velocity', 'f4', ('time', 'isobaric','latitude', 'longitude'))
-        temperature_var = ncfile.createVariable('temperature', 'f4', ('time', 'isobaric','latitude', 'longitude'))
-        absolute_vorticity_var = ncfile.createVariable('absolute vorticity', 'f4', ('time', 'isobaric','latitude', 'longitude'))
-        cloud_mixing_ratio_var = ncfile.createVariable('cloud_mixing_ratio', 'f4', ('time', 'isobaric','latitude', 'longitude'))
-        total_cloud_cover_var =  ncfile.createVariable('total_cloud_cover', 'f4', ('time', 'isobaric','latitude', 'longitude'))
+        relative_humidity_var = ncfile.createVariable('relative_humidity', 'f4', ('time', 'isobaric','latitude', 'longitude'),zlib=True)
+        vertical_velocity_var = ncfile.createVariable('vertical_velocity', 'f4', ('time', 'isobaric','latitude', 'longitude'),zlib=True)
+        temperature_var = ncfile.createVariable('temperature', 'f4', ('time', 'isobaric','latitude', 'longitude'),zlib=True)
+        absolute_vorticity_var = ncfile.createVariable('absolute vorticity', 'f4', ('time', 'isobaric','latitude', 'longitude'),zlib=True)
+        cloud_mixing_ratio_var = ncfile.createVariable('cloud_mixing_ratio', 'f4', ('time', 'isobaric','latitude', 'longitude'),zlib=True)
         time_var = ncfile.createVariable('time', 'f8', ('time',))
 
         # Set the data values for latitude, longitude, cloud_mask, and time
@@ -112,7 +111,7 @@ def save_GFS_to_nc(latitude, longitude, isobaric, relative_humidity, vertical_ve
 #%%
 #Run through same timeframes as GFS_download script to get correct closest CLAVR_x data
 
-start_year = 2019
+start_year = 2018
 start_month = 1
 start_day = 1
 start_hour = 12 + 3 #Using 3 hour forecast so lets add 3 
@@ -136,6 +135,7 @@ sel_month = sel_time.strftime('%m')
 sel_julian_day = sel_time.strftime('%j')
 sel_day = sel_time.strftime('%d')
 sel_hr = sel_time.strftime('%H')
+sel_min = sel_time.strftime('%M')
 
 #Create empty file list
 clavrx_flist = []
@@ -148,12 +148,44 @@ var_list = ['cld_height_base_acha','cld_height_acha', 'cloud_mask' ]
 while sel_time < end_time:
 
     #Set directory string
-    dir_1 = '/mnt/multilayer/ynoh/GOES16_ABI/clavrx_run_SLIDER/RadC/output/'
-    dir_2 = sel_year + sel_julian_day + '/'
-    dir_3 = 'clavrx_goes16_'+ sel_year + '_' + sel_julian_day + '_' + sel_hr + '0117.level2.hdf'
+    if sel_time > datetime(2021, 12, 31, 23, 59):
+        dir_1 = '/mnt/multilayer/ynoh/GOES16_ABI/clavrx_run_SLIDER/RadF/output/'
+        dir_2 = sel_year + sel_julian_day + '/'
+        dir_3 = 'clavrx_goes16_'+ sel_year + '_' + sel_julian_day + '_' + sel_hr + sel_min + '*.level2.hdf'
+        full_dir_sel = dir_1 + dir_2 + dir_3
+        full_dir_glob = sorted(glob.glob(full_dir_sel))
+        if len(full_dir_glob) == 0:
+            #Update time selection
+            sel_time = sel_time + timedelta(hours = 24)
+            sel_year = sel_time.strftime('%Y')
+            sel_julian_day = sel_time.strftime('%j')
+            sel_hr = sel_time.strftime('%H')
+            continue
+        else:
+            full_dir = full_dir_glob[0]
+
+    elif sel_time < datetime(2021, 12, 31, 23, 59):
+        dir_1 = (f'/mnt/multilayer/ynoh/GOES16_ABI/clavrx_run_SLIDER/RadF/output/{sel_year}/')
+        dir_2 = sel_year + sel_julian_day + '/'
+        dir_3 = 'clavrx_goes16_'+ sel_year + '_' + sel_julian_day + '_' + sel_hr + sel_min + '*.level2.hdf'
+        full_dir_sel = dir_1 + dir_2 + dir_3
+        full_dir_glob = sorted(glob.glob(full_dir_sel))
+        if len(full_dir_glob) == 0:
+            #Update time selection
+            sel_time = sel_time + timedelta(hours = 24)
+            sel_year = sel_time.strftime('%Y')
+            sel_julian_day = sel_time.strftime('%j')
+            sel_hr = sel_time.strftime('%H')
+            continue
+        else:
+            full_dir = full_dir_glob[0]
+
+    #clavrx_goes16_2019_001_1500.level2.hdf
+    #clavrx_goes16_2018_003_1500.level2.hdf
+    #clavrx_goes16_2022_001_150020.level2.hdf
 
     #Combine strings
-    full_dir = dir_1 + dir_2 + dir_3
+    # full_dir_sel = dir_1 + dir_2 + dir_3
 
     #Update time selection
     sel_time = sel_time + timedelta(hours = 24)
@@ -225,7 +257,7 @@ len_lat = np.round(np.arange(bottom_lat, top_lat, res),2)
 meshlon, meshlat = np.meshgrid(len_lon, len_lat)
 
 #Get location for conus GOES file to use as reference for interpolation of data on to grid
-GOES16_CONUS = '/mnt/data2/mking/ATS780/GOES_files/OR_ABI-L1b-RadC-M6C13_G16_s20230911401170_e20230911403557_c20230911403596.nc'
+GOES16_CONUS = '/mnt/data1/mking/ATS780/GOES_files/OR_ABI-L1b-RadC-M6C13_G16_s20230911401170_e20230911403557_c20230911403596.nc'
 geo_xarray = xr.open_dataset(GOES16_CONUS)
 
 # Get test cloud mask data
@@ -281,7 +313,7 @@ plt.close()
 #Save data into netcdf files in ATS780 directory 
 
 # Specify the local directory where you want to save the file
-local_directory = '/mnt/data2/mking/ATS780/CLAVRX_data/'
+local_directory = '/mnt/data1/mking/ATS780/CLAVRX_data/'
 
 # Create the local directory if it doesn't exist
 os.makedirs(local_directory, exist_ok=True)
@@ -327,13 +359,13 @@ for idx in range(len(clavrx_flist)):
 #Based on files that were available for clavrx, interpolate GFS data and save into directory
 
 #Get file list within the local directory for just saved clavrx files
-new_clavrx_flist = sorted(glob.glob('/mnt/data2/mking/ATS780/CLAVRX_data/*'))
+new_clavrx_flist = sorted(glob.glob('/mnt/data1/mking/ATS780/CLAVRX_data/*'))
 
 #Define directory where GFS files were saved
-GFS_directory = '/mnt/data2/mking/ATS780/GFS_files/'
+GFS_directory = '/mnt/data1/mking/ATS780/GFS_files/'
 
 # Specify the local directory where we will place interpolated GFS data
-processed_GFS_directory = '/mnt/data2/mking/ATS780/processed_GFS_files/'
+processed_GFS_directory = '/mnt/data1/mking/ATS780/processed_GFS_files/'
 
 # Create the local directory if it doesn't exist
 os.makedirs(processed_GFS_directory, exist_ok=True)
@@ -572,10 +604,10 @@ nofile_indexes = indexes(persistance_clavrx_flist, 'No File')
 nofile_indexes = (list(nofile_indexes))
 
 # Specify the local directory where the interpolated GFS data resides
-processed_GFS_directory = '/mnt/data2/mking/ATS780/processed_GFS_files/'
+processed_GFS_directory = '/mnt/data1/mking/ATS780/processed_GFS_files/'
 
 # Specify the local directory where the interpolated CLAVRx data resides
-clavrx_directory = '/mnt/data2/mking/ATS780/CLAVRX_data/'
+clavrx_directory = '/mnt/data1/mking/ATS780/CLAVRX_data/'
 
 #Get the sorted file list in each directory
 final_clavrx_flist = sorted(glob.glob(clavrx_directory + '*'))
@@ -608,7 +640,7 @@ for i in nofile_indexes:
 #With Persistance Clavrx Files List...save and interpolate data to process in homework script later...
 
 # Specify the local directory where you want to save the file
-local_directory = '/mnt/data2/mking/ATS780/Persist_CLAVRX_data_/'
+local_directory = '/mnt/data1/mking/ATS780/Persist_CLAVRX_data_/'
 
 # Create the local directory if it doesn't exist
 os.makedirs(local_directory, exist_ok=True)

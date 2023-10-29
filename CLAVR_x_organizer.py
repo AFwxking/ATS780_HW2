@@ -56,7 +56,6 @@ def save_to_netcdf(latitude, longitude, cloud_mask, datetime_obj, output_file):
 
     print(f"Data saved to {output_file}")
 
-
 def save_GFS_to_nc(latitude, longitude, isobaric, relative_humidity, vertical_velocity, temperature, absolute_vorticity, cloud_mixing_ratio, datetime_obj, output_file):
     """
     Save latitude, longitude, GFS_data, and datetime data into a NetCDF file.
@@ -103,7 +102,6 @@ def save_GFS_to_nc(latitude, longitude, isobaric, relative_humidity, vertical_ve
         temperature_var[0,:,:,:] = temperature
         absolute_vorticity_var[0,:,:,:] = absolute_vorticity
         cloud_mixing_ratio_var[0,:,:,:] = cloud_mixing_ratio
-        total_cloud_cover_var[0,:,:,:] = total_cloud_cover
         time_var[0] = nc.date2num(datetime_obj, units='hours since 1970-01-01 00:00:00', calendar='gregorian')
 
     print(f"Data saved to {output_file}")
@@ -187,12 +185,6 @@ while sel_time < end_time:
     #Combine strings
     # full_dir_sel = dir_1 + dir_2 + dir_3
 
-    #Update time selection
-    sel_time = sel_time + timedelta(hours = 24)
-    sel_year = sel_time.strftime('%Y')
-    sel_julian_day = sel_time.strftime('%j')
-    sel_hr = sel_time.strftime('%H')
-
     try: #File may not exist...loading data within try/except
         #Test file
         data_load = xr.open_dataset(full_dir, engine ='netcdf4')
@@ -211,12 +203,24 @@ while sel_time < end_time:
         #Go to next iteration if missing a variable
         if np.min(var_test) == 0:
             print('Missing variable...going to next sample iteration')
+
+            #Update time selection
+            sel_time = sel_time + timedelta(hours = 24)
+            sel_year = sel_time.strftime('%Y')
+            sel_julian_day = sel_time.strftime('%j')
+            sel_hr = sel_time.strftime('%H')
             continue
         
         #Save file directory & time
         print(f'Saving file directory: {full_dir}')
         clavrx_flist.append(full_dir)
         time_list.append(sel_time)
+
+        #Update time selection
+        sel_time = sel_time + timedelta(hours = 24)
+        sel_year = sel_time.strftime('%Y')
+        sel_julian_day = sel_time.strftime('%j')
+        sel_hr = sel_time.strftime('%H')
 
     except ValueError as e:
         # Print error and repeat loop
@@ -257,7 +261,7 @@ len_lat = np.round(np.arange(bottom_lat, top_lat, res),2)
 meshlon, meshlat = np.meshgrid(len_lon, len_lat)
 
 #Get location for conus GOES file to use as reference for interpolation of data on to grid
-GOES16_CONUS = '/mnt/data1/mking/ATS780/GOES_files/OR_ABI-L1b-RadC-M6C13_G16_s20230911401170_e20230911403557_c20230911403596.nc'
+GOES16_CONUS = '/mnt/grb/goes16/2023/2023_10_14_287/abi/L1b/RadF/OR_ABI-L1b-RadF-M6C13_G16_s20232870000207_e20232870009527_c20232870009575.nc'
 geo_xarray = xr.open_dataset(GOES16_CONUS)
 
 # Get test cloud mask data
@@ -416,23 +420,137 @@ for idx in range (len(time_list)):
     GFS_load = xr.open_dataset(GFS_flist[idx])
     GFS_lon_data = GFS_load['longitude'].data
     GFS_lat_data = GFS_load['latitude'].data
-    isobaric_data_full = GFS_load['isobaric'].data/100 #Converting to mb
-    isobaric_bool = (isobaric_data_full >= 100) #Create boolean index that has pressure coordinate at or below 100mb in height (anything above probably no cloud)
-    isobaric_data = isobaric_data_full[isobaric_bool] #Update isobaric coordinate
-    isobaric1 = GFS_load['isobaric1'].data/100 #Converting alternate pressure coordinates to mb
-    isobaric1_bool = (isobaric1 >= 100) #Create boolean index that has pressure coordinate at or below 100mb
-    vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
-    vertical_velocity_data = vertical_velocity_data[isobaric_bool, :, :] #Eliminate values higher than 100mb
-    relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
-    relative_humidity_data = relative_humidity_data[isobaric_bool, :, :] #Eliminate values higher than 100mb
-    temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
-    temperature_data = temperature_data[isobaric_bool, :, :] #Eliminate values higher than 100mb
-    absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
-    absolute_vorticity_data = absolute_vorticity_data[isobaric_bool, :, :] #Eliminate value higher than 100mb
-    cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
-    cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric1_bool, :, :] #Eliminate values above 100mb
-    total_cloud_cover_data = np.squeeze(GFS_load['Total_cloud_cover_isobaric'].data)
-    total_cloud_cover_data = total_cloud_cover_data[isobaric1_bool, :, :]
+
+    #Based on coordinates from GFS_load...get needed variables and calculate booleans
+    coordinates = GFS_load.coords
+    if  'isobaric' in coordinates:
+        isobaric_data_full = GFS_load['isobaric'].data/100 #Converting to mb
+        isobaric_bool = (isobaric_data_full >= 100) #Create boolean index that has pressure coordinate at or below 100mb in height (anything above probably no cloud)
+        isobaric_data = isobaric_data_full[isobaric_bool] #Update isobaric coordinate
+    if 'isobaric1' in coordinates:
+        isobaric1 = GFS_load['isobaric1'].data/100 #Converting alternate pressure coordinates to mb
+        isobaric1_bool = (isobaric1 >= 100) #Create boolean index that has pressure coordinate at or below 100mb
+        if 'isobaric' not in GFS_load.coords:
+            isobaric_data = isobaric1[isobaric1_bool] #Update isobaric coordinate
+    if 'isobaric2' in coordinates:
+        isobaric2 = GFS_load['isobaric2'].data/100 #Converting alternate pressure coordinates to mb
+        isobaric2_bool = (isobaric2 >= 100) #Create boolean index that has pressure coordinate at or below 100mb
+    if 'isobaric3' in coordinates:
+        isobaric3 = GFS_load['isobaric3'].data/100
+        isobaric3_bool = (isobaric3 >= 100)
+    if 'isobaric4' in coordinates:
+        isobaric4 = GFS_load['isobaric4'].data/100
+        isobaric4_bool = (isobaric4 >= 100)
+    if 'isobaric5' in coordinates:
+        isobaric5 = GFS_load['isobaric5'].data/100
+        isobaric5_bool = (isobaric5 >= 100)
+    
+    #Based on dims of each variables...use the appropriate isobaric boolean
+    
+    #Vertical Velocity
+    dims_test = GFS_load['Vertical_velocity_pressure_isobaric'].dims
+    if 'isobaric' in dims_test:
+        vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
+        vertical_velocity_data = vertical_velocity_data[isobaric_bool, :, :] #Eliminate values higher than 100m
+    elif 'isobaric1' in dims_test:
+        vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
+        vertical_velocity_data = vertical_velocity_data[isobaric1_bool, :, :] #Eliminate values higher than 100m
+    elif 'isobaric2' in dims_test:
+        vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
+        vertical_velocity_data = vertical_velocity_data[isobaric2_bool, :, :] #Eliminate values higher than 100m
+    elif 'isobaric3' in dims_test:
+        vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
+        vertical_velocity_data = vertical_velocity_data[isobaric3_bool, :, :] #Eliminate values higher than 100m
+    elif 'isobaric4' in dims_test:
+        vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
+        vertical_velocity_data = vertical_velocity_data[isobaric4_bool, :, :] #Eliminate values higher than 100m
+    elif 'isobaric5' in dims_test:
+        vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
+        vertical_velocity_data = vertical_velocity_data[isobaric4_bool, :, :] #Eliminate values higher than 100m
+
+    #Relative Humidity
+    dims_test = GFS_load['Relative_humidity_isobaric'].dims
+    if 'isobaric' in dims_test:
+        relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
+        relative_humidity_data = relative_humidity_data[isobaric_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric1' in dims_test:
+        relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
+        relative_humidity_data = relative_humidity_data[isobaric1_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric2' in dims_test:
+        relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
+        relative_humidity_data = relative_humidity_data[isobaric2_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric3' in dims_test:
+        relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
+        relative_humidity_data = relative_humidity_data[isobaric3_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric4' in dims_test:
+        relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
+        relative_humidity_data = relative_humidity_data[isobaric4_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric5' in dims_test:
+        relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
+        relative_humidity_data = relative_humidity_data[isobaric5_bool, :, :] #Eliminate values higher than 100mb
+
+    #Temperature
+    dims_test = GFS_load['Temperature_isobaric'].dims
+    if 'isobaric' in dims_test:
+        temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
+        temperature_data = temperature_data[isobaric_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric1' in dims_test:
+        temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
+        temperature_data = temperature_data[isobaric1_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric2' in dims_test:
+        temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
+        temperature_data = temperature_data[isobaric2_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric3' in dims_test:
+        temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
+        temperature_data = temperature_data[isobaric3_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric4' in dims_test:
+        temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
+        temperature_data = temperature_data[isobaric4_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric5' in dims_test:
+        temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
+        temperature_data = temperature_data[isobaric5_bool, :, :] #Eliminate values higher than 100mb
+
+    #Absolute Vorticity
+    dims_test = GFS_load['Absolute_vorticity_isobaric'].dims
+    if 'isobaric' in dims_test:
+        absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
+        absolute_vorticity_data = absolute_vorticity_data[isobaric_bool, :, :] #Eliminate value higher than 100mb
+    elif 'isobaric1' in dims_test:
+        absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
+        absolute_vorticity_data = absolute_vorticity_data[isobaric1_bool, :, :] #Eliminate value higher than 100mb
+    elif 'isobaric2' in dims_test:
+        absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
+        absolute_vorticity_data = absolute_vorticity_data[isobaric2_bool, :, :] #Eliminate value higher than 100mb
+    elif 'isobaric3' in dims_test:
+        absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
+        absolute_vorticity_data = absolute_vorticity_data[isobaric3_bool, :, :] #Eliminate value higher than 100mb
+    elif 'isobaric4' in dims_test:
+        absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
+        absolute_vorticity_data = absolute_vorticity_data[isobaric4_bool, :, :] #Eliminate value higher than 100mb
+    elif 'isobaric5' in dims_test:
+        absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
+        absolute_vorticity_data = absolute_vorticity_data[isobaric5_bool, :, :] #Eliminate value higher than 100mb
+    
+    #Cloud Mixing Ratio
+    dims_test = GFS_load['Cloud_mixing_ratio_isobaric'].dims
+    if 'isobaric' in dims_test:
+        cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
+        cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric_bool, :, :] #Eliminate values above 100mb
+    elif 'isobaric1' in dims_test:
+        cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
+        cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric1_bool, :, :] #Eliminate values above 100mb
+    elif 'isobaric2' in dims_test:
+        cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
+        cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric2_bool, :, :] #Eliminate values above 100mb
+    elif 'isobaric3' in dims_test:
+        cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
+        cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric3_bool, :, :] #Eliminate values above 100mb
+    elif 'isobaric4' in dims_test:
+        cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
+        cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric4_bool, :, :] #Eliminate values above 100mb
+    elif 'isobaric5' in dims_test:
+        cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
+        cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric5_bool, :, :] #Eliminate values above 100mb
 
     #Subtract 360 from longitudes that should be negative (i.e. west of prime meridian)
     GFS_lon_data[GFS_lon_data > 180] = GFS_lon_data[GFS_lon_data > 180] - 360
@@ -458,7 +576,6 @@ for idx in range (len(time_list)):
     temperature_data = temperature_data[:, GFS_index]
     absolute_vorticity_data = absolute_vorticity_data[:,GFS_index]
     cloud_mixing_ratio_data = cloud_mixing_ratio_data[:,GFS_index]
-    total_cloud_cover_data = total_cloud_cover_data[:,GFS_index]
 
     #Using shape of isolated meshgrid to reshape isolated variables
     vertical_velocity_data = np.resize(vertical_velocity_data,(np.shape(isobaric_data)[0],np.shape(iso_lon_mesh)[0], np.shape(iso_lon_mesh)[1]))
@@ -466,8 +583,6 @@ for idx in range (len(time_list)):
     temperature_data  = np.resize(temperature_data,(np.shape(isobaric_data)[0],np.shape(iso_lon_mesh)[0], np.shape(iso_lon_mesh)[1]))
     absolute_vorticity_data  = np.resize(absolute_vorticity_data,(np.shape(isobaric_data)[0],np.shape(iso_lon_mesh)[0], np.shape(iso_lon_mesh)[1]))
     cloud_mixing_ratio_data = np.resize(cloud_mixing_ratio_data,(np.shape(isobaric_data)[0],np.shape(iso_lon_mesh)[0], np.shape(iso_lon_mesh)[1]))
-    total_cloud_cover_data = np.resize(total_cloud_cover_data,(np.shape(isobaric_data)[0],np.shape(iso_lon_mesh)[0], np.shape(iso_lon_mesh)[1]))
-
 
     #Interpolating GFS data to meshgrid
     print('Working on interpolation')
@@ -476,24 +591,22 @@ for idx in range (len(time_list)):
     new_temperature = np.empty((np.shape(isobaric_data)[0], np.shape(meshlon)[0], np.shape(meshlon)[1]))
     new_absolute_vorticity = np.empty((np.shape(isobaric_data)[0], np.shape(meshlon)[0], np.shape(meshlon)[1]))
     new_cloud_mixing_ratio = np.empty((np.shape(isobaric_data)[0], np.shape(meshlon)[0], np.shape(meshlon)[1]))
-    new_total_cloud_cover = np.empty((np.shape(isobaric_data)[0], np.shape(meshlon)[0], np.shape(meshlon)[1]))
     for pres_index in range(np.shape(isobaric_data)[0]):
         new_vertical_velocity[pres_index,:,:] = bilinear_interp_fn(iso_lon_mesh,iso_lat_mesh, vertical_velocity_data[pres_index,:,:], meshlon, meshlat)
         new_relative_humidity[pres_index,:,:] = bilinear_interp_fn(iso_lon_mesh,iso_lat_mesh, relative_humidity_data[pres_index,:,:], meshlon, meshlat)
         new_temperature[pres_index,:,:] = bilinear_interp_fn(iso_lon_mesh,iso_lat_mesh, temperature_data[pres_index,:,:], meshlon, meshlat)
         new_absolute_vorticity[pres_index,:,:] = bilinear_interp_fn(iso_lon_mesh,iso_lat_mesh, absolute_vorticity_data[pres_index,:,:], meshlon, meshlat)
         new_cloud_mixing_ratio[pres_index,:,:] = bilinear_interp_fn(iso_lon_mesh,iso_lat_mesh, cloud_mixing_ratio_data[pres_index,:,:], meshlon, meshlat)
-        new_total_cloud_cover[pres_index,:,:] = bilinear_interp_fn(iso_lon_mesh,iso_lat_mesh, total_cloud_cover_data[pres_index,:,:], meshlon, meshlat)
         print(str(round((((pres_index + 1)/np.shape(isobaric_data)[0]))*100,0))+'% complete...',end='\r')
 
     #Save interpolated GFS variables to netcdf
-    save_GFS_to_nc(len_lat, len_lon, isobaric_data, new_relative_humidity, new_vertical_velocity, new_temperature, new_absolute_vorticity, new_cloud_mixing_ratio, new_total_cloud_cover, time_list[idx], gfs_file_name)
+    save_GFS_to_nc(len_lat, len_lon, isobaric_data, new_relative_humidity, new_vertical_velocity, new_temperature, new_absolute_vorticity, new_cloud_mixing_ratio, time_list[idx], gfs_file_name)
 
     
     #Make plot if first iteration
     if idx == 0:
 
-        cld_cover_test = np.max(new_total_cloud_cover, axis = 0)
+        rh_max_test = np.max(new_relative_humidity, axis = 0)
 
         fig, ax = plt.subplots(subplot_kw={'projection': ccrs.PlateCarree()})
 
@@ -502,7 +615,7 @@ for idx in range (len(time_list)):
         # extent = [GFS_lon_1d.min(), GFS_lon_1d.max(), GFS_lat_1d.min(), GFS_lat_1d.max()]
 
         # Use imshow to plot data with the correct coordinate transformation
-        image = ax.imshow(cld_cover_test, cmap='jet', vmin=0, vmax=100, origin='lower', extent=extent)
+        image = ax.imshow(rh_max_test, cmap='jet', vmin=0, vmax=100, origin='lower', extent=extent)
 
         # Add gridlines
         gl = ax.gridlines(draw_labels=True, linewidth=1, color='gray', alpha=0.5, linestyle='--')
@@ -512,7 +625,7 @@ for idx in range (len(time_list)):
         gl.yformatter = LATITUDE_FORMATTER
 
         # Add Figure Title
-        plt.title(f"GFS Total Cloud Cover Plot Test", fontsize=10, pad=15)
+        plt.title(f"GFS Max RH Plot Test", fontsize=10, pad=15)
 
         # Adding border features last to be on top
         ax.add_feature(cfeature.COASTLINE.with_scale('50m'), linewidth=2)

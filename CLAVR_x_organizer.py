@@ -444,6 +444,9 @@ for idx in range (len(time_list)):
     if 'isobaric5' in coordinates:
         isobaric5 = GFS_load['isobaric5'].data/100
         isobaric5_bool = (isobaric5 >= 100)
+    if 'isobaric6' in coordinates:
+        isobaric6 = GFS_load['isobaric6'].data/100
+        isobaric6_bool = (isobaric6 >= 100)
     
     #Based on dims of each variables...use the appropriate isobaric boolean
     
@@ -451,22 +454,25 @@ for idx in range (len(time_list)):
     dims_test = GFS_load['Vertical_velocity_pressure_isobaric'].dims
     if 'isobaric' in dims_test:
         vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
-        vertical_velocity_data = vertical_velocity_data[isobaric_bool, :, :] #Eliminate values higher than 100m
+        vertical_velocity_data = vertical_velocity_data[isobaric_bool, :, :] #Eliminate values higher than 100mb
     elif 'isobaric1' in dims_test:
         vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
-        vertical_velocity_data = vertical_velocity_data[isobaric1_bool, :, :] #Eliminate values higher than 100m
+        vertical_velocity_data = vertical_velocity_data[isobaric1_bool, :, :] #Eliminate values higher than 100mb
     elif 'isobaric2' in dims_test:
         vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
-        vertical_velocity_data = vertical_velocity_data[isobaric2_bool, :, :] #Eliminate values higher than 100m
+        vertical_velocity_data = vertical_velocity_data[isobaric2_bool, :, :] #Eliminate values higher than 100mb
     elif 'isobaric3' in dims_test:
         vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
-        vertical_velocity_data = vertical_velocity_data[isobaric3_bool, :, :] #Eliminate values higher than 100m
+        vertical_velocity_data = vertical_velocity_data[isobaric3_bool, :, :] #Eliminate values higher than 100mb
     elif 'isobaric4' in dims_test:
         vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
-        vertical_velocity_data = vertical_velocity_data[isobaric4_bool, :, :] #Eliminate values higher than 100m
+        vertical_velocity_data = vertical_velocity_data[isobaric4_bool, :, :] #Eliminate values higher than 100mb
     elif 'isobaric5' in dims_test:
         vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
-        vertical_velocity_data = vertical_velocity_data[isobaric4_bool, :, :] #Eliminate values higher than 100m
+        vertical_velocity_data = vertical_velocity_data[isobaric5_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric6' in dims_test:
+        vertical_velocity_data = np.squeeze(GFS_load['Vertical_velocity_pressure_isobaric'].data)
+        vertical_velocity_data = vertical_velocity_data[isobaric6_bool, :, :] #Eliminate values higher than 100mb
 
     #Relative Humidity
     dims_test = GFS_load['Relative_humidity_isobaric'].dims
@@ -488,6 +494,9 @@ for idx in range (len(time_list)):
     elif 'isobaric5' in dims_test:
         relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
         relative_humidity_data = relative_humidity_data[isobaric5_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric6' in dims_test:
+        relative_humidity_data = np.squeeze(GFS_load['Relative_humidity_isobaric'].data)
+        relative_humidity_data = relative_humidity_data[isobaric6_bool, :, :] #Eliminate values higher than 100mb
 
     #Temperature
     dims_test = GFS_load['Temperature_isobaric'].dims
@@ -509,6 +518,9 @@ for idx in range (len(time_list)):
     elif 'isobaric5' in dims_test:
         temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
         temperature_data = temperature_data[isobaric5_bool, :, :] #Eliminate values higher than 100mb
+    elif 'isobaric6' in dims_test:
+        temperature_data = np.squeeze(GFS_load['Temperature_isobaric'].data)
+        temperature_data = temperature_data[isobaric6_bool, :, :] #Eliminate values higher than 100mb
 
     #Absolute Vorticity
     dims_test = GFS_load['Absolute_vorticity_isobaric'].dims
@@ -530,6 +542,9 @@ for idx in range (len(time_list)):
     elif 'isobaric5' in dims_test:
         absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
         absolute_vorticity_data = absolute_vorticity_data[isobaric5_bool, :, :] #Eliminate value higher than 100mb
+    elif 'isobaric6' in dims_test:
+        absolute_vorticity_data = np.squeeze(GFS_load['Absolute_vorticity_isobaric'].data)
+        absolute_vorticity_data = absolute_vorticity_data[isobaric6_bool, :, :] #Eliminate value higher than 100mb
     
     #Cloud Mixing Ratio
     dims_test = GFS_load['Cloud_mixing_ratio_isobaric'].dims
@@ -551,6 +566,9 @@ for idx in range (len(time_list)):
     elif 'isobaric5' in dims_test:
         cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
         cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric5_bool, :, :] #Eliminate values above 100mb
+    elif 'isobaric6' in dims_test:
+        cloud_mixing_ratio_data = np.squeeze(GFS_load['Cloud_mixing_ratio_isobaric'].data) * 1000 #Get in grams/kg...uses isobaric1 coordinate...same as updated isobaric_data created above
+        cloud_mixing_ratio_data = cloud_mixing_ratio_data[isobaric6_bool, :, :] #Eliminate values above 100mb
 
     #Subtract 360 from longitudes that should be negative (i.e. west of prime meridian)
     GFS_lon_data[GFS_lon_data > 180] = GFS_lon_data[GFS_lon_data > 180] - 360
@@ -660,12 +678,27 @@ for idx in range (len(time_list)):
     sel_hr = sel_time.strftime('%H')
         
     #Set directory string
-    dir_1 = '/mnt/multilayer/ynoh/GOES16_ABI/clavrx_run_SLIDER/RadC/output/'
-    dir_2 = sel_year + sel_julian_day + '/'
-    dir_3 = 'clavrx_goes16_'+ sel_year + '_' + sel_julian_day + '_' + sel_hr + '0117.level2.hdf'
+    if sel_time > datetime(2021, 12, 31, 23, 59):
 
-    #Combine strings
-    full_dir = dir_1 + dir_2 + dir_3
+        dir_1 = '/mnt/multilayer/ynoh/GOES16_ABI/clavrx_run_SLIDER/RadF/output/'
+        dir_2 = sel_year + sel_julian_day + '/'
+        dir_3 = 'clavrx_goes16_'+ sel_year + '_' + sel_julian_day + '_' + sel_hr + sel_min + '*.level2.hdf'
+        full_dir_sel = dir_1 + dir_2 + dir_3
+        full_dir_glob = sorted(glob.glob(full_dir_sel))
+
+    elif sel_time < datetime(2021, 12, 31, 23, 59):
+
+        dir_1 = (f'/mnt/multilayer/ynoh/GOES16_ABI/clavrx_run_SLIDER/RadF/output/{sel_year}/')
+        dir_2 = sel_year + sel_julian_day + '/'
+        dir_3 = 'clavrx_goes16_'+ sel_year + '_' + sel_julian_day + '_' + sel_hr + sel_min + '*.level2.hdf'
+        full_dir_sel = dir_1 + dir_2 + dir_3
+        full_dir_glob = sorted(glob.glob(full_dir_sel))
+
+    if len(full_dir_glob) == 0:
+        persistance_clavrx_flist.append('No File')
+        continue
+    else:
+        full_dir = full_dir_glob[0]
 
     try: #File may not exist...loading data within try/except
         #Test file
@@ -744,7 +777,7 @@ for nofile_idx in nofile_indexes:
         print(f"Error: {e}")
 
 #Delete "No File" instances from persistance_clavrx_flist
-nofile_indexes.sort(reverse=True)  # Sort in reverse order to avoid index issues
+nofile_indexes.sort(reverse=True)  # Sort in reverse order to avoid index issues 
 for i in nofile_indexes:
     del persistance_clavrx_flist[i]
     del time_list[i]

@@ -18,6 +18,22 @@ import pandas as pd
 import random
 import tensorflow as tf
 
+#Setting visible GPU devices (only using device 0)
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+  # Restrict TensorFlow to only use one GPU
+  try:
+    tf.config.experimental.set_memory_growth(gpus[0], True) #Only use as much memory as needed instead of maxing at first call of tf
+    tf.config.set_logical_device_configuration(
+        gpus[0],
+        [tf.config.LogicalDeviceConfiguration(memory_limit=40000)])
+    tf.config.set_visible_devices(gpus[0], 'GPU')
+    logical_gpus = tf.config.list_logical_devices('GPU')
+    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+  except RuntimeError as e:
+    # Visible devices must be set before GPUs have been initialized
+    print(e)
+
 # %%
 
 # Specify the local directory where the interpolated GFS data resides
@@ -409,10 +425,10 @@ for idx in range(len(clavrx_flist_test)):
     print(f'{idx + 1}/{len(clavrx_flist_test)} completed', end='\r')
 #%%
 
-#Save Dataframe
-df_val.to_csv('HW2_data_val.csv', index=False)
-df_trng.to_csv('HW2_data_trng.csv', index=False)
-df_test.to_csv('HW2_data_test.csv', index=False)
+# #Save Dataframe
+# df_val.to_csv('HW2_data_val.csv', index=False)
+# df_trng.to_csv('HW2_data_trng.csv', index=False)
+# df_test.to_csv('HW2_data_test.csv', index=False)
 
 #Load a DataFrame from a CSV file...run if needed
 df_val = pd.read_csv('HW2_data_val.csv')
@@ -625,13 +641,13 @@ print(confusion)
 
 #Build Neural Network
 settings = {
-    "hiddens": [100, 100, 100],
+    "hiddens": [3, 3, 3],
     "activations": ["relu", "relu", "relu"],
     "learning_rate": 0.0001,
     "random_seed": 33,
     "max_epochs": 100,
     "batch_size": 64,
-    "patience": 10,
+    "patience": 20,
     "dropout_rate": 0.,
 }
 
@@ -717,7 +733,7 @@ y_val_np = y_val.to_numpy()
 y_val_np = (y_val_np).astype(int)
 y_val_hot = np.eye(2)[y_val_np.flatten()]
 
-Cloud_Mask_Model = build_model(X_trng_np, y_trng_np, settings)
+Cloud_Mask_Model = build_model(X_trng_np, y_trng_hot, settings)
 
 Cloud_Mask_Model = compile_model(Cloud_Mask_Model, settings)
 
@@ -731,15 +747,71 @@ early_stopping_callback = tf.keras.callbacks.EarlyStopping(
 #     1: 1 / np.mean(Ttrain[:, 1] == 1),
 # }
 
-history = Cloud_Mask_Model.fit(X_trng,y_trng, 
+history = Cloud_Mask_Model.fit(X_trng_np,y_trng_hot, 
                          epochs = settings["max_epochs"], 
                          batch_size=settings["batch_size"], 
                          shuffle=True,
-                         validation_data=[X_val_np,y_val_np],
+                         validation_data=[X_val_np,y_val_hot],
                          callbacks=[early_stopping_callback],
                         #  class_weight = class_weights,
                          verbose = 1)
 
-# %%
+#Print names of items stored in history...then use to plot loss history
+print(history.history.keys())
 
-NN_pred_val = Cloud_Mask_Model.predict(X_val)
+# Create subplots
+fig, axs = plt.subplots(1, 2, figsize=(15, 8))
+# Print evolution of loss - separately for training and validation data
+axs[0].plot(history.epoch, history.history['loss'], label='Trng Loss', color='blue')
+axs[0].plot(history.epoch, history.history['val_loss'], label='Val Loss', color='red')
+axs[0].set_title(f'Training/Validation Loss History: {settings["hiddens"][0]} nodes per hidden layer')
+axs[0].legend()
+axs[0].set_xlabel('epoch')
+axs[0].set_ylabel('Categorical Crossentropy')
+# Plot Mean absolute error of training & validation data
+axs[1].plot(history.epoch, history.history['categorical_accuracy'], label='Trng Cat Accuracy', color='blue')
+axs[1].plot(history.epoch, history.history['val_categorical_accuracy'], label='Val Cat Accuracy', color='red')
+axs[1].set_title(f'Training/Validation Accuracy History: {settings["hiddens"][0]} nodes per hidden layer')
+axs[1].legend()
+axs[1].set_xlabel('epoch')
+axs[1].set_ylabel('Categorical Accuracy')
+
+#Save figure
+#Before saving figure...check for file path
+path_test = os.path.exists('Plots/')
+if (path_test == False): #If path doesn't exist...create folder
+    os.mkdir('Plots/')
+plt.savefig(f'Plots/Trng_Loss_Hiddens_{settings["hiddens"][0]}.png')
+plt.show()
+plt.close()
+
+
+# %%
+NN_pred_trng_hot = Cloud_Mask_Model.predict(X_trng_np)
+NN_pred_val_hot = Cloud_Mask_Model.predict(X_val_np)
+
+#Convert predictions to binary arrays
+NN_pred_trng_hot = np.round(NN_pred_trng_hot)
+NN_pred_trng = np.argmax(NN_pred_trng_hot, axis=1).reshape(-1, 1)
+NN_pred_val_hot = np.round(NN_pred_val_hot)
+NN_pred_val = np.argmax(NN_pred_val_hot, axis=1).reshape(-1, 1)
+
+#Confusion Matrix on training data
+acc = metrics.accuracy_score(y_trng, NN_pred_trng)
+print("training accuracy: ", np.around(acc*100), '%')
+confusion = confusion_matrix(y_trng, NN_pred_trng)
+print(confusion)
+
+#Plot Confusion Matrix
+confusion_matrix_plot(NN_pred_trng, y_trng, pred_classes, true_classes)
+
+#Confusion Matrix on training data
+acc = metrics.accuracy_score(y_val, NN_pred_val)
+print("validation accuracy: ", np.around(acc*100), '%')
+confusion = confusion_matrix(y_val_baseline, NN_pred_val)
+print(confusion)
+
+#Plot Confusion Matrix
+confusion_matrix_plot(NN_pred_val, y_val, pred_classes, true_classes)
+
+# %%

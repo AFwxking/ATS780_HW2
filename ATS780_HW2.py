@@ -2,7 +2,7 @@
 #Script takes data prepared from GFS_download.py and CLAVR_x_organizer.py to run Random Forecst model
 
 #%%
-from graphviz import Source # To plot trees
+from graphviz import Source # To plot trees  "conda install graphviz" & conda install python-graphviz
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -16,22 +16,35 @@ import glob
 import xarray as xr
 import pandas as pd
 import random
+import tensorflow as tf
 
 # %%
 
 # Specify the local directory where the interpolated GFS data resides
-processed_GFS_directory = '/mnt/data2/mking/ATS780/processed_GFS_files/'
+processed_GFS_directory = '/mnt/data1/mking/ATS780/processed_GFS_files/'
 
 # Specify the local directory where the interpolated CLAVRx data resides
-clavrx_directory = '/mnt/data2/mking/ATS780/CLAVRX_data/'
+clavrx_directory = '/mnt/data1/mking/ATS780/CLAVRX_data/'
 
 # Specify the local direcotry where the persistance interpolated CLAVRx data resides
-persistance_directory = '/mnt/data2/mking/ATS780/Persist_CLAVRX_data_/'
+persistance_directory = '/mnt/data1/mking/ATS780/Persist_CLAVRX_data_/'
 
 #Get the sorted file list in each directory
-clavrx_flist = sorted(glob.glob(clavrx_directory + '*'))
-GFS_flist = sorted(glob.glob(processed_GFS_directory + '*'))
-persist_flist = sorted(glob.glob(persistance_directory + '*'))
+clavrx_flist_val = sorted(glob.glob(clavrx_directory + 'clavrx_2018*'))
+clavrx_flist_trng = sorted(glob.glob(clavrx_directory + 'clavrx_2019*'))
+clavrx_flist_test = sorted(glob.glob(clavrx_directory + 'clavrx_2022*'))
+
+GFS_flist_val = sorted(glob.glob(processed_GFS_directory + 'GFS_2018*'))
+GFS_flist_trng = sorted(glob.glob(processed_GFS_directory + 'GFS_2019*'))
+GFS_flist_test = sorted(glob.glob(processed_GFS_directory + 'GFS_2022*'))
+
+persist_flist_val = sorted(glob.glob(persistance_directory + 'clavrx_2018*'))
+persist_flist_trng = sorted(glob.glob(persistance_directory + 'clavrx_2019*'))
+persist_flist_test = sorted(glob.glob(persistance_directory + 'clavrx_2022*'))
+
+print(len(clavrx_flist_val), len(clavrx_flist_trng), len(clavrx_flist_test))
+print(len(GFS_flist_val), len(GFS_flist_trng), len(GFS_flist_test))
+print(len(persist_flist_val), len(persist_flist_trng), len(persist_flist_test))
 
 #%%
 #Select a number of random latitude/longitude values to use on each file
@@ -55,47 +68,63 @@ random.seed(42)
 
 #Generate random lat/lon pairs
 num_of_pairs_each_time = 200
-random_lat_lon_idx_pairs = np.empty((len(clavrx_flist)*num_of_pairs_each_time, 2)).astype(int)
-for idx in range(len(clavrx_flist)*num_of_pairs_each_time):
+random_lat_lon_idx_pairs_val = np.empty((len(clavrx_flist_val)*num_of_pairs_each_time, 2)).astype(int)
+random_lat_lon_idx_pairs_trng = np.empty((len(clavrx_flist_trng)*num_of_pairs_each_time, 2)).astype(int)
+random_lat_lon_idx_pairs_test = np.empty((len(clavrx_flist_test)*num_of_pairs_each_time, 2)).astype(int)
+
+for idx in range(len(clavrx_flist_val)*num_of_pairs_each_time):
     lat_idx = random.randint(0, np.shape(len_lat)[0] - 1)
     lon_idx = random.randint(0, np.shape(len_lon)[0] - 1)
-    random_lat_lon_idx_pairs[idx,0] = lat_idx
-    random_lat_lon_idx_pairs[idx,1] = lon_idx
+    random_lat_lon_idx_pairs_val[idx,0] = lat_idx
+    random_lat_lon_idx_pairs_val[idx,1] = lon_idx
+
+for idx in range(len(clavrx_flist_trng)*num_of_pairs_each_time):
+    lat_idx = random.randint(0, np.shape(len_lat)[0] - 1)
+    lon_idx = random.randint(0, np.shape(len_lon)[0] - 1)
+    random_lat_lon_idx_pairs_trng[idx,0] = lat_idx
+    random_lat_lon_idx_pairs_trng[idx,1] = lon_idx
+
+for idx in range(len(clavrx_flist_test)*num_of_pairs_each_time):
+    lat_idx = random.randint(0, np.shape(len_lat)[0] - 1)
+    lon_idx = random.randint(0, np.shape(len_lon)[0] - 1)
+    random_lat_lon_idx_pairs_test[idx,0] = lat_idx
+    random_lat_lon_idx_pairs_test[idx,1] = lon_idx
 
 # %%
 
 #Loop through files, pull out data based on selected lat/lon indexes and place into dataframe
-for idx in range(len(clavrx_flist)):
+
+#Validation Data
+for idx in range(len(clavrx_flist_val)):
 
     #Load clavrx data and update values to 0 and 1
-    clavrx_load = xr.open_dataset(clavrx_flist[idx])
+    clavrx_load = xr.open_dataset(clavrx_flist_val[idx])
     cloud_mask_data = np.squeeze(clavrx_load['cloud_mask'].data) #0 clear, 1 probably clear, 2 probably cloud, 3 cloudy
     cloud_mask = np.empty(cloud_mask_data.shape)
     cloud_mask[(cloud_mask_data >= 2 )] = 1 #Anything probably cloudy and cloudy becomes 1
     cloud_mask[(cloud_mask_data < 2)] = 0 #Anything probably clear and clear becomes 0
 
     #Load clavrx data and update values to 0 and 1
-    persist_load = xr.open_dataset(persist_flist[idx])
+    persist_load = xr.open_dataset(persist_flist_val[idx])
     persist_data = np.squeeze(persist_load['cloud_mask'].data) #0 clear, 1 probably clear, 2 probably cloud, 3 cloudy
     persist_mask = np.empty(persist_data.shape)
     persist_mask[(persist_data >= 2 )] = 1 #Anything probably cloudy and cloudy becomes 1
     persist_mask[(persist_data < 2)] = 0 #Anything probably clear and clear becomes 0
 
     #Load GFS data 
-    GFS_load = xr.open_dataset(GFS_flist[idx])
+    GFS_load = xr.open_dataset(GFS_flist_val[idx])
     isobaric = GFS_load['isobaric'].data
     relative_humidity_data = np.squeeze(GFS_load['relative_humidity'].data)
     vertical_velocity_data = np.squeeze(GFS_load['vertical_velocity'].data)
     temperature_data = np.squeeze(GFS_load['temperature'].data)
     absolute_vorticity_data = np.squeeze(GFS_load['absolute vorticity'].data)
     cloud_mixing_ratio_data = np.squeeze(GFS_load['cloud_mixing_ratio'].data)
-    total_cloud_cover_data = np.squeeze(GFS_load['total_cloud_cover'].data)
 
     # Initialize an empty dictionary to store the data for each variable
     data_dict = {}
 
     # Variable names
-    variable_names = ['Cld_Msk', 'Cld_Msk_Persist','RH', 'VV', 'Temp', 'AbsVort', 'Cld_Mix_Ratio', 'Total_Cld_Cvr']  
+    variable_names = ['Cld_Msk', 'Cld_Msk_Persist','RH', 'VV', 'Temp', 'AbsVort', 'Cld_Mix_Ratio']  
 
     #Current lat/lon index values
     pair_idx_1 = idx * num_of_pairs_each_time
@@ -107,7 +136,7 @@ for idx in range(len(clavrx_flist)):
         #Add Cld_Msk values        
         if variable == 'Cld_Msk':
             
-            data = cloud_mask[random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ] ]
+            data = cloud_mask[random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 1 ] ]
 
             # Create column name
             column_name = f'{variable}'
@@ -118,7 +147,7 @@ for idx in range(len(clavrx_flist)):
         #Add Cld_Msk values        
         if variable == 'Cld_Msk_Persist':
             
-            data = persist_mask[random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ] ]
+            data = persist_mask[random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 1 ] ]
 
             # Create column name
             column_name = f'{variable}'
@@ -133,75 +162,279 @@ for idx in range(len(clavrx_flist)):
             
             # Extract data for the current variable and pressure level
             if variable == 'RH':
-                data = relative_humidity_data[isobaric == pressure_level, random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ]]
+                data = relative_humidity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 1 ]]
 
                 # Add data to the dictionary
                 data_dict[column_name] = data
 
             elif variable == 'VV':
-                data = vertical_velocity_data[isobaric == pressure_level, random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ]]
+                data = vertical_velocity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 1 ]]
 
                 # Add data to the dictionary
                 data_dict[column_name] = data
 
             elif variable == 'Temp':
-                data = temperature_data[isobaric == pressure_level, random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ]]
+                data = temperature_data[isobaric == pressure_level, random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 1 ]]
 
                 # Add data to the dictionary
                 data_dict[column_name] = data
 
             elif variable == 'AbsVort':
-                data = absolute_vorticity_data[isobaric == pressure_level, random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ]]
+                data = absolute_vorticity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 1 ]]
 
                 # Add data to the dictionary
                 data_dict[column_name] = data
 
             elif variable == 'Cld_Mix_Ratio':
-                data = cloud_mixing_ratio_data[isobaric == pressure_level, random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ]]
-
-                # Add data to the dictionary
-                data_dict[column_name] = data
-
-            elif variable == 'Total_Cld_Cvr':
-                data = total_cloud_cover_data[isobaric == pressure_level, random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs[ pair_idx_1 : pair_idx_2 , 1 ]]
+                data = cloud_mixing_ratio_data[isobaric == pressure_level, random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_val[ pair_idx_1 : pair_idx_2 , 1 ]]
 
                 # Add data to the dictionary
                 data_dict[column_name] = data
 
     if idx == 0: #If first file...create dataframe
-        df = pd.DataFrame(data_dict)
+        df_val = pd.DataFrame(data_dict)
     else: #If any other...append dataframe to first
-        next_df = pd.DataFrame(data_dict)
-        df = pd.concat([df, next_df], ignore_index=True)
+        next_df_val = pd.DataFrame(data_dict)
+        df_val = pd.concat([df_val, next_df_val], ignore_index=True)
 
-    print(f'{idx + 1}/{len(clavrx_flist)} completed', end='\r')
+    print(f'{idx + 1}/{len(clavrx_flist_val)} completed', end='\r')
 
+#Trng Data
+for idx in range(len(clavrx_flist_trng)):
+    #Load clavrx data and update values to 0 and 1
+    clavrx_load = xr.open_dataset(clavrx_flist_trng[idx])
+    cloud_mask_data = np.squeeze(clavrx_load['cloud_mask'].data) #0 clear, 1 probably clear, 2 probably cloud, 3 cloudy
+    cloud_mask = np.empty(cloud_mask_data.shape)
+    cloud_mask[(cloud_mask_data >= 2 )] = 1 #Anything probably cloudy and cloudy becomes 1
+    cloud_mask[(cloud_mask_data < 2)] = 0 #Anything probably clear and clear becomes 0
+
+    #Load clavrx data and update values to 0 and 1
+    persist_load = xr.open_dataset(persist_flist_trng[idx])
+    persist_data = np.squeeze(persist_load['cloud_mask'].data) #0 clear, 1 probably clear, 2 probably cloud, 3 cloudy
+    persist_mask = np.empty(persist_data.shape)
+    persist_mask[(persist_data >= 2 )] = 1 #Anything probably cloudy and cloudy becomes 1
+    persist_mask[(persist_data < 2)] = 0 #Anything probably clear and clear becomes 0
+
+    #Load GFS data 
+    GFS_load = xr.open_dataset(GFS_flist_trng[idx])
+    isobaric = GFS_load['isobaric'].data
+    relative_humidity_data = np.squeeze(GFS_load['relative_humidity'].data)
+    vertical_velocity_data = np.squeeze(GFS_load['vertical_velocity'].data)
+    temperature_data = np.squeeze(GFS_load['temperature'].data)
+    absolute_vorticity_data = np.squeeze(GFS_load['absolute vorticity'].data)
+    cloud_mixing_ratio_data = np.squeeze(GFS_load['cloud_mixing_ratio'].data)
+
+    # Initialize an empty dictionary to store the data for each variable
+    data_dict = {}
+
+    # Variable names
+    variable_names = ['Cld_Msk', 'Cld_Msk_Persist','RH', 'VV', 'Temp', 'AbsVort', 'Cld_Mix_Ratio']  
+
+    #Current lat/lon index values
+    pair_idx_1 = idx * num_of_pairs_each_time
+    pair_idx_2 = (idx * num_of_pairs_each_time) + num_of_pairs_each_time
+
+    # Loop through variable names
+    for variable in variable_names:
+
+        #Add Cld_Msk values        
+        if variable == 'Cld_Msk':
+            
+            data = cloud_mask[random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 1 ] ]
+
+            # Create column name
+            column_name = f'{variable}'
+            
+            # Add data to the dictionary
+            data_dict[column_name] = data
+        
+        #Add Cld_Msk values        
+        if variable == 'Cld_Msk_Persist':
+            
+            data = persist_mask[random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 1 ] ]
+
+            # Create column name
+            column_name = f'{variable}'
+            
+            # Add data to the dictionary
+            data_dict[column_name] = data
+
+        # Loop through pressure levels
+        for pressure_level in isobaric:
+            # Create column name
+            column_name = f'{variable}_{pressure_level}mb'
+            
+            # Extract data for the current variable and pressure level
+            if variable == 'RH':
+                data = relative_humidity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'VV':
+                data = vertical_velocity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'Temp':
+                data = temperature_data[isobaric == pressure_level, random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'AbsVort':
+                data = absolute_vorticity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'Cld_Mix_Ratio':
+                data = cloud_mixing_ratio_data[isobaric == pressure_level, random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_trng[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+    if idx == 0: #If first file...create dataframe
+        df_trng = pd.DataFrame(data_dict)
+    else: #If any other...append dataframe to first
+        next_df_trng = pd.DataFrame(data_dict)
+        df_trng = pd.concat([df_trng, next_df_trng], ignore_index=True)
+    print(f'{idx + 1}/{len(clavrx_flist_trng)} completed',end='\r')
+
+#Test Data
+for idx in range(len(clavrx_flist_test)):
+
+    #Load clavrx data and update values to 0 and 1
+    clavrx_load = xr.open_dataset(clavrx_flist_test[idx])
+    cloud_mask_data = np.squeeze(clavrx_load['cloud_mask'].data) #0 clear, 1 probably clear, 2 probably cloud, 3 cloudy
+    cloud_mask = np.empty(cloud_mask_data.shape)
+    cloud_mask[(cloud_mask_data >= 2 )] = 1 #Anything probably cloudy and cloudy becomes 1
+    cloud_mask[(cloud_mask_data < 2)] = 0 #Anything probably clear and clear becomes 0
+
+    #Load clavrx data and update values to 0 and 1
+    persist_load = xr.open_dataset(persist_flist_test[idx])
+    persist_data = np.squeeze(persist_load['cloud_mask'].data) #0 clear, 1 probably clear, 2 probably cloud, 3 cloudy
+    persist_mask = np.empty(persist_data.shape)
+    persist_mask[(persist_data >= 2 )] = 1 #Anything probably cloudy and cloudy becomes 1
+    persist_mask[(persist_data < 2)] = 0 #Anything probably clear and clear becomes 0
+
+    #Load GFS data 
+    GFS_load = xr.open_dataset(GFS_flist_test[idx])
+    isobaric = GFS_load['isobaric'].data
+    relative_humidity_data = np.squeeze(GFS_load['relative_humidity'].data)
+    vertical_velocity_data = np.squeeze(GFS_load['vertical_velocity'].data)
+    temperature_data = np.squeeze(GFS_load['temperature'].data)
+    absolute_vorticity_data = np.squeeze(GFS_load['absolute vorticity'].data)
+    cloud_mixing_ratio_data = np.squeeze(GFS_load['cloud_mixing_ratio'].data)
+
+    # Initialize an empty dictionary to store the data for each variable
+    data_dict = {}
+
+    # Variable names
+    variable_names = ['Cld_Msk', 'Cld_Msk_Persist','RH', 'VV', 'Temp', 'AbsVort', 'Cld_Mix_Ratio']  
+
+    #Current lat/lon index values
+    pair_idx_1 = idx * num_of_pairs_each_time
+    pair_idx_2 = (idx * num_of_pairs_each_time) + num_of_pairs_each_time
+
+    # Loop through variable names
+    for variable in variable_names:
+
+        #Add Cld_Msk values        
+        if variable == 'Cld_Msk':
+            
+            data = cloud_mask[random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 1 ] ]
+
+            # Create column name
+            column_name = f'{variable}'
+            
+            # Add data to the dictionary
+            data_dict[column_name] = data
+        
+        #Add Cld_Msk values        
+        if variable == 'Cld_Msk_Persist':
+            
+            data = persist_mask[random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 1 ] ]
+
+            # Create column name
+            column_name = f'{variable}'
+            
+            # Add data to the dictionary
+            data_dict[column_name] = data
+
+        # Loop through pressure levels
+        for pressure_level in isobaric:
+            # Create column name
+            column_name = f'{variable}_{pressure_level}mb'
+            
+            # Extract data for the current variable and pressure level
+            if variable == 'RH':
+                data = relative_humidity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'VV':
+                data = vertical_velocity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'Temp':
+                data = temperature_data[isobaric == pressure_level, random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'AbsVort':
+                data = absolute_vorticity_data[isobaric == pressure_level, random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+            elif variable == 'Cld_Mix_Ratio':
+                data = cloud_mixing_ratio_data[isobaric == pressure_level, random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 0 ], random_lat_lon_idx_pairs_test[ pair_idx_1 : pair_idx_2 , 1 ]]
+
+                # Add data to the dictionary
+                data_dict[column_name] = data
+
+    if idx == 0: #If first file...create dataframe
+        df_test = pd.DataFrame(data_dict)
+    else: #If any other...append dataframe to first
+        next_df_test = pd.DataFrame(data_dict)
+        df_test = pd.concat([df_test, next_df_test], ignore_index=True)
+        print(len(df_test))
+
+    print(f'{idx + 1}/{len(clavrx_flist_test)} completed', end='\r')
 #%%
 
 #Save Dataframe
-df.to_csv('HW1_data.csv', index=False)
+df_val.to_csv('HW2_data_val.csv', index=False)
+df_trng.to_csv('HW2_data_trng.csv', index=False)
+df_test.to_csv('HW2_data_test.csv', index=False)
 
-# #Load a DataFrame from a CSV file...run if needed
-# df = pd.read_csv('HW1_data.csv')
+#Load a DataFrame from a CSV file...run if needed
+df_val = pd.read_csv('HW2_data_val.csv')
+df_trng = pd.read_csv('HW2_data_trng.csv')
+df_test = pd.read_csv('HW2_data_test.csv')
 
 #%%
-# Split the data
-X = df.drop(columns=['Cld_Msk','Cld_Msk_Persist'])
-y = df[['Cld_Msk','Cld_Msk_Persist']]
 
-# Reserve the held-back testing data
-X_trainval, X_test, y_trainval, y_test = train_test_split(X, y, test_size=.2,random_state=13) 
+# Split for Trng
+X_trng = df_trng.drop(columns=['Cld_Msk','Cld_Msk_Persist'])
+y_trng = df_trng[['Cld_Msk']]
+y_trng_baseline = df_trng['Cld_Msk_Persist']
 
-# Now reserve validation for hyperparamter tuning
-X_train, X_val, y_train, y_val = train_test_split(X_trainval, y_trainval, test_size=.2,random_state=13)
+# Split for Val
+X_val = df_val.drop(columns=['Cld_Msk','Cld_Msk_Persist'])
+y_val = df_val['Cld_Msk']
+y_val_baseline = df_val['Cld_Msk_Persist']
 
-# Get Cld_Msk_Persist for each dataset to use as baseline
-y_test_baseline = y_test['Cld_Msk_Persist']
-y_test = y_test.drop(columns=['Cld_Msk_Persist'])
-y_train_baseline = y_train['Cld_Msk_Persist']
-y_train = y_train.drop(columns=['Cld_Msk_Persist'])
-y_val_baseline = y_val['Cld_Msk_Persist']
-y_val = y_val.drop(columns=['Cld_Msk_Persist'])
+# Split for Test
+X_test = df_test.drop(columns=['Cld_Msk','Cld_Msk_Persist'])
+y_test = df_test['Cld_Msk']
+y_test_baseline = df_test['Cld_Msk_Persist']
 
 # %%
 #Define random forest and train model
@@ -229,18 +462,18 @@ rf_classifier = RandomForestClassifier(n_estimators = fd["tree_number"],
                            max_samples = fd["max_samples"])
 
 #Train random forest
-rf_classifier.fit(X_train, y_train)
+rf_classifier.fit(X_trng, y_trng)
 
 #Make prediction on all training data
-y_pred_train = rf_classifier.predict(X_train)
+y_pred_trng = rf_classifier.predict(X_trng)
 
 #%%
 #Confusion Matrix on training data
 
-acc = metrics.accuracy_score(y_train, y_pred_train)
+acc = metrics.accuracy_score(y_trng, y_pred_trng)
 print("training accuracy: ", np.around(acc*100), '%')
 
-confusion = confusion_matrix(y_train, y_pred_train)
+confusion = confusion_matrix(y_trng, y_pred_trng)
 
 print(confusion)
 
@@ -261,16 +494,16 @@ def confusion_matrix_plot(predclasses, targclasses, pred_classes, true_classes):
   display(conf_matrix.style.background_gradient(cmap='Greens').format("{:.1f}"))
 
 #Plot Confusion Matrix
-confusion_matrix_plot(y_pred_train, y_train['Cld_Msk'], pred_classes, true_classes)
+confusion_matrix_plot(y_pred_trng, y_trng['Cld_Msk'], pred_classes, true_classes)
 
 #Plot Confusion Matrix for baseline
-confusion_matrix_plot(y_train_baseline, y_train['Cld_Msk'], pred_classes, true_classes)
+confusion_matrix_plot(y_trng_baseline, y_trng['Cld_Msk'], pred_classes, true_classes)
 
-acc = metrics.accuracy_score(y_train, y_train_baseline)
+acc = metrics.accuracy_score(y_trng, y_trng_baseline)
 print("baseline training accuracy: ", np.around(acc*100), '%')
 
 #Confusion numbers for baseline
-confusion = confusion_matrix(y_train, y_train_baseline)
+confusion = confusion_matrix(y_trng, y_trng_baseline)
 print(confusion)
 
 #%%
@@ -287,10 +520,10 @@ confusion_validation = confusion_matrix(y_val, y_pred_val)
 print(confusion_validation)
 
 #Plot Confusion Matrix
-confusion_matrix_plot(y_pred_val, y_val['Cld_Msk'], pred_classes, true_classes)
+confusion_matrix_plot(y_pred_val, y_val, pred_classes, true_classes)
 
 #Plot Confusion Matrix for baseline
-confusion_matrix_plot(y_val_baseline, y_val['Cld_Msk'], pred_classes, true_classes)
+confusion_matrix_plot(y_val_baseline, y_val, pred_classes, true_classes)
 
 acc = metrics.accuracy_score(y_val, y_val_baseline)
 print("baseline validation accuracy: ", np.around(acc*100), '%')
@@ -301,12 +534,12 @@ print(confusion)
 
 #%%
 #Look at individual tree
-local_path = '/home/mking/ATS780/'
+local_path = '/home/mking/ATS780_HW2/'
 fig_savename = 'rf_cloud_tree'
 tree_to_plot = 0 # Enter the value of the tree that you want to see!
 
 #Get predictor feature names
-column_names = X.columns
+column_names = X_trng.columns
 column_names = column_names.tolist()
 
 tree = rf_classifier[tree_to_plot] # Obtain the tree to plot
@@ -361,32 +594,6 @@ def plot_feat_importances(importances, feature_list):
 plot_feat_importances(calc_importances(rf_classifier, column_names),  column_names)
 
 
-#%%
-#Permutation importance
-
-# Single-pass permutation
-permute = permutation_importance(
-    rf_classifier, X_val, y_val, n_repeats=20, random_state=fd["random_state"])
-
-# Sort the importances
-sorted_idx = permute.importances_mean.argsort()
-
-def plot_perm_importances(permute, sorted_idx, feature_list):
-    ''' Plot the permutation importances calculated in previous cell '''
-    # Sort the feature list based on 
-    new_feature_list = []
-    for index in sorted_idx:  
-        new_feature_list.append(feature_list[index])
-
-    fig, ax = plt.subplots(figsize = (19,25))
-    ax.boxplot(permute.importances[sorted_idx].T,
-           vert=False, labels=new_feature_list)
-    ax.set_title("Permutation Importances")
-    fig.tight_layout()
-    
-plot_perm_importances(permute, sorted_idx, column_names)
-
-
 # %% 
 # Evaluate the model on test data
 y_pred = rf_classifier.predict(X_test)
@@ -402,10 +609,10 @@ confusion = confusion_matrix(y_test, y_pred)
 print(confusion)
 
 #Plot Confusion Matrix
-confusion_matrix_plot(y_pred, y_test['Cld_Msk'], pred_classes, true_classes)
+confusion_matrix_plot(y_pred, y_test, pred_classes, true_classes)
 
 #Plot Confusion Matrix for baseline
-confusion_matrix_plot(y_test_baseline, y_test['Cld_Msk'], pred_classes, true_classes)
+confusion_matrix_plot(y_test_baseline, y_test, pred_classes, true_classes)
 
 acc = metrics.accuracy_score(y_test, y_test_baseline)
 print("baseline validation accuracy: ", np.around(acc*100), '%')
@@ -414,4 +621,125 @@ print("baseline validation accuracy: ", np.around(acc*100), '%')
 confusion = confusion_matrix(y_test, y_test_baseline)
 print(confusion)
 
+#%%
+
+#Build Neural Network
+settings = {
+    "hiddens": [100, 100, 100],
+    "activations": ["relu", "relu", "relu"],
+    "learning_rate": 0.0001,
+    "random_seed": 33,
+    "max_epochs": 100,
+    "batch_size": 64,
+    "patience": 10,
+    "dropout_rate": 0.,
+}
+
+def build_model(x_train, y_train, settings):
+    # create input layer
+    input_layer = tf.keras.layers.Input(shape=x_train.shape[1:])
+
+    # create a normalization layer if you would like
+    normalizer = tf.keras.layers.Normalization(axis=(1,))
+    normalizer.adapt(x_train)
+    layers = normalizer(input_layer)
+
+    # create hidden layers each with specific number of nodes
+    assert len(settings["hiddens"]) == len(
+        settings["activations"]
+    ), "hiddens and activations settings must be the same length."
+
+    # add dropout layer
+    layers = tf.keras.layers.Dropout(rate=settings["dropout_rate"])(layers)
+
+    for hidden, activation in zip(settings["hiddens"], settings["activations"]):
+        layers = tf.keras.layers.Dense(
+            units=hidden,
+            activation=activation,
+            use_bias=True,
+            kernel_regularizer=tf.keras.regularizers.l1_l2(l1=0, l2=0),
+            bias_initializer=tf.keras.initializers.RandomNormal(seed=settings["random_seed"]),
+            kernel_initializer=tf.keras.initializers.RandomNormal(seed=settings["random_seed"]),
+        )(layers)
+
+    # # create output layer
+    # output_layer = tf.keras.layers.Dense(
+    #     units=y_train.shape[-1],
+    #     activation="linear",
+    #     use_bias=True,
+    #     bias_initializer=tf.keras.initializers.RandomNormal(seed=settings["random_seed"] + 1),
+    #     kernel_initializer=tf.keras.initializers.RandomNormal(seed=settings["random_seed"] + 2),
+    # )(layers)
+
+    # create output layer
+    output_layer = tf.keras.layers.Dense(
+        units=y_train.shape[-1],
+        activation="sigmoid",
+        use_bias=True,
+        bias_initializer=tf.keras.initializers.RandomNormal(seed=settings["random_seed"] + 1),
+        kernel_initializer=tf.keras.initializers.RandomNormal(seed=settings["random_seed"] + 2),
+    )(layers)    
+
+    # construct the model
+    model = tf.keras.Model(inputs=input_layer, outputs=output_layer)
+    model.summary()
+
+    return model
+
+
+def compile_model(model, settings):
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=settings["learning_rate"]),
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        metrics=[
+            tf.keras.metrics.CategoricalAccuracy(),
+        ],
+    )
+    return model
+
+# def compile_model(model, settings):
+#     model.compile(
+#         optimizer=tf.keras.optimizers.Adam(learning_rate=settings["learning_rate"]),
+#         loss='mse',
+#         metrics='mae')
+    
+#     return model
+
+#%%
+
+#Converting pandas dataframes to numpy arrays
+X_trng_np = X_trng.to_numpy()
+y_trng_np = y_trng.to_numpy()
+y_trng_np = (y_trng_np).astype(int)
+y_trng_hot = np.eye(2)[y_trng_np.flatten()]
+X_val_np = X_val.to_numpy()
+y_val_np = y_val.to_numpy()
+y_val_np = (y_val_np).astype(int)
+y_val_hot = np.eye(2)[y_val_np.flatten()]
+
+Cloud_Mask_Model = build_model(X_trng_np, y_trng_np, settings)
+
+Cloud_Mask_Model = compile_model(Cloud_Mask_Model, settings)
+
+# define the early stopping callback
+early_stopping_callback = tf.keras.callbacks.EarlyStopping(
+    monitor="val_loss", patience=settings["patience"], restore_best_weights=True, mode="auto")
+
+# # define the class weights
+# class_weights = {
+#     0: 1 / np.mean(Ttrain[:, 0] == 1),
+#     1: 1 / np.mean(Ttrain[:, 1] == 1),
+# }
+
+history = Cloud_Mask_Model.fit(X_trng,y_trng, 
+                         epochs = settings["max_epochs"], 
+                         batch_size=settings["batch_size"], 
+                         shuffle=True,
+                         validation_data=[X_val_np,y_val_np],
+                         callbacks=[early_stopping_callback],
+                        #  class_weight = class_weights,
+                         verbose = 1)
+
 # %%
+
+NN_pred_val = Cloud_Mask_Model.predict(X_val)
